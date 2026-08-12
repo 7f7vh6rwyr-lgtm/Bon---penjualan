@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Bon Penjualan">
+<title>Bon Penjualan</title>
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f3f4f6;color:#111827}
+header{background:#111827;color:white;padding:18px 16px calc(18px + env(safe-area-inset-top));position:sticky;top:0;z-index:5}
+h1{font-size:22px;margin:0 0 4px}.sub{opacity:.75;font-size:13px}
+main{max-width:700px;margin:auto;padding:14px 14px 100px}
+.card{background:white;border-radius:16px;padding:15px;margin:10px 0;box-shadow:0 2px 10px #0000000b}
+label{display:block;font-size:13px;font-weight:600;margin:10px 0 5px}
+input,select,button{width:100%;font:inherit;border-radius:11px;padding:12px;border:1px solid #d1d5db;background:white}
+button{border:0;background:#111827;color:white;font-weight:700;margin-top:10px}
+button.secondary{background:#e5e7eb;color:#111827}.danger{background:#dc2626}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:9px}.total{font-size:24px;font-weight:800;margin-top:10px}
+.item{display:grid;grid-template-columns:1fr 90px 100px 40px;gap:6px;align-items:center;margin:7px 0}
+.item input{padding:10px}.item button{margin:0;padding:10px}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:8px 4px;border-bottom:1px solid #eee;text-align:left}
+.small{font-size:12px;color:#6b7280}.empty{text-align:center;color:#6b7280;padding:20px}
+</style>
+</head>
+<body>
+<header><h1>Bon Penjualan</h1><div class="sub">Pencatatan penjualan • tersimpan di iPhone</div></header>
+<main>
+<section class="card">
+<h2 style="margin-top:0">Buat Bon</h2>
+<div class="row">
+<div><label>No. Bon</label><input id="noBon"></div>
+<div><label>Tanggal</label><input id="tanggal" type="date"></div>
+</div>
+<label>Nama Pelanggan</label><input id="pelanggan" placeholder="Nama pelanggan">
+<div class="row">
+<div><label>Metode Pembayaran</label>
+<select id="metode"><option>Tunai</option><option>Transfer</option><option>QRIS</option><option>Hutang</option></select></div>
+<div><label>Sudah Dibayar</label><input id="dibayar" type="number" min="0" value="0" oninput="calc()"></div>
+</div>
+<label>Barang</label>
+<div id="items"></div>
+<button class="secondary" onclick="addItem()">+ Tambah Barang</button>
+<div class="total">Total: <span id="total">Rp0</span></div>
+<div class="small">Sisa pembayaran: <b id="sisa">Rp0</b></div>
+<button onclick="saveBon()">Simpan Bon</button>
+<button class="secondary" id="cancelEdit" style="display:none" onclick="cancelEdit()">Batal Edit</button>
+</section>
+
+<section class="card">
+<h2 style="margin-top:0">Riwayat Bon</h2>
+<input id="search" placeholder="Cari nomor / pelanggan..." oninput="render()">
+<div id="history"></div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let bons=JSON.parse(localStorage.getItem('bons_v2')||localStorage.getItem('bons_v1')||'[]'),items=[],editIndex=-1;
+function rupiah(n){return new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(n||0)}
+function today(){let d=new Date();return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
+function init(){$('tanggal').value=today();$('noBon').value='BON-'+String(bons.length+1).padStart(4,'0');addItem();render()}
+function addItem(){items.push({nama:'',qty:1,harga:0});renderItems()}
+function renderItems(){$('items').innerHTML=items.map((x,i)=>`<div class="item"><input placeholder="Nama barang" value="${esc(x.nama)}" oninput="items[${i}].nama=this.value"><input type="number" min="1" value="${x.qty}" oninput="items[${i}].qty=+this.value||1;calc()"><input type="number" min="0" value="${x.harga}" oninput="items[${i}].harga=+this.value||0;calc()"><button class="danger" onclick="items.splice(${i},1);renderItems();calc()">×</button></div>`).join('');calc()}
+function calc(){let t=items.reduce((s,x)=>s+x.qty*x.harga,0),d=+$('dibayar').value||0;$('total').textContent=rupiah(t);$('sisa').textContent=rupiah(Math.max(0,t-d))}
+function saveBon(){
+ let clean=items.filter(x=>x.nama.trim());if(!clean.length){alert('Masukkan minimal 1 barang.');return}
+ let total=clean.reduce((s,x)=>s+x.qty*x.harga,0),paid=Math.max(0,+$('dibayar').value||0);
+ let data={no:$('noBon').value,date:$('tanggal').value,customer:$('pelanggan').value,method:$('metode').value,paid,total,items:clean};
+ if(editIndex>=0)bons[editIndex]=data;else bons.unshift(data);
+ localStorage.setItem('bons_v2',JSON.stringify(bons));alert(editIndex>=0?'Bon berhasil diperbarui.':'Bon berhasil disimpan.');resetForm()
+}
+function resetForm(){editIndex=-1;items=[];addItem();$('pelanggan').value='';$('dibayar').value=0;$('tanggal').value=today();$('metode').value='Tunai';$('noBon').value='BON-'+String(bons.length+1).padStart(4,'0');$('cancelEdit').style.display='none';render()}
+function editBon(i){let b=bons[i];editIndex=i;$('noBon').value=b.no||'';$('tanggal').value=b.date||today();$('pelanggan').value=b.customer||'';$('metode').value=b.method||b.payment||'Tunai';$('dibayar').value=b.paid||0;items=(b.items||[]).map(x=>({nama:x.nama||'',qty:+x.qty||1,harga:+x.harga||0}));if(!items.length)items.push({nama:'',qty:1,harga:0});$('cancelEdit').style.display='block';renderItems();scrollTo({top:0,behavior:'smooth'})}
+function cancelEdit(){resetForm()}
+function render(){
+ let q=($('search').value||'').toLowerCase(),data=bons.map((b,i)=>({b,i})).filter(o=>(o.b.no+' '+(o.b.customer||'')).toLowerCase().includes(q));
+ $('history').innerHTML=data.length?data.map(({b,i})=>{let paid=+b.paid||0,sisa=Math.max(0,(+b.total||0)-paid);return `<div class="card" style="box-shadow:none;border:1px solid #eee"><b>${esc(b.no)}</b><div class="small">${esc(b.date)} • ${esc(b.customer||'-')} • ${esc(b.method||b.payment||'-')}</div><div style="font-size:18px;font-weight:800;margin:7px 0">${rupiah(b.total)}</div><div class="small">Dibayar: ${rupiah(paid)} • Sisa: ${rupiah(sisa)}</div><button onclick="editBon(${i})">Edit Bon / Pembayaran</button><button class="secondary" onclick="detail(${i})">Lihat Detail</button><button class="danger" onclick="delBon(${i})">Hapus</button></div>`}).join(''):'<div class="empty">Belum ada bon.</div>'
+}
+function detail(i){let b=bons[i],paid=+b.paid||0,sisa=Math.max(0,(+b.total||0)-paid),text=`${b.no}\nTanggal: ${b.date}\nPelanggan: ${b.customer||'-'}\nPembayaran: ${b.method||b.payment||'-'}\n\n`;(b.items||[]).forEach(x=>text+=`${x.nama} — ${x.qty} x ${rupiah(x.harga)} = ${rupiah(x.qty*x.harga)}\n`);alert(text+`\nTOTAL: ${rupiah(b.total)}\nDIBAYAR: ${rupiah(paid)}\nSISA: ${rupiah(sisa)}`)}
+function delBon(i){if(confirm('Hapus bon ini?')){bons.splice(i,1);localStorage.setItem('bons_v2',JSON.stringify(bons));render()}}
+if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+init();
+</script></script></body></html>
